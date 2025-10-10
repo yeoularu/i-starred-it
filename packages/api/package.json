@@ -26,6 +26,7 @@
     "@orpc/openapi": "catalog:",
     "@orpc/zod": "catalog:",
     "dotenv": "catalog:",
+    "hono": "catalog:",
     "zod": "catalog:",
     "@i-starred-it/auth": "workspace:*",
     "@i-starred-it/db": "workspace:*"

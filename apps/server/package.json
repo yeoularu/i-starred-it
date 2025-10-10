@@ -12,7 +12,7 @@
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   },
   "dependencies": {
-    "hono": "^4.8.2",
+    "hono": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/openapi": "catalog:",
     "@orpc/zod": "catalog:",
