@@ -9,7 +9,8 @@
     "dev": "wrangler dev --port=3000",
     "start": "wrangler dev",
     "deploy": "wrangler deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:migrate:local": "wrangler d1 migrations apply i-starred-it-d1 --local"
   },
   "dependencies": {
     "hono": "catalog:",

@@ -13,8 +13,11 @@ export const auth = betterAuth({
   }),
 
   trustedOrigins: [env.CORS_ORIGIN],
-  emailAndPassword: {
-    enabled: true,
+  socialProviders: {
+    github: {
+      clientId: env.GITHUB_CLIENT_ID ?? "",
+      clientSecret: env.GITHUB_CLIENT_SECRET ?? "",
+    },
   },
   // uncomment cookieCache setting when ready to deploy to Cloudflare using *.workers.dev domains
   // session: {

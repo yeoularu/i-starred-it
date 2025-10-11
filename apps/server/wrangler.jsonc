@@ -6,7 +6,8 @@
 	"vars": {
 		"NODE_ENV": "production",
 		"CORS_ORIGIN": "https://i-starred-it.yeoularu.com",
-		"BETTER_AUTH_URL": "https://i-starred-it-server.yeoularu.workers.dev"
+		"BETTER_AUTH_URL": "https://i-starred-it-server.yeoularu.com",
+		"GITHUB_CLIENT_ID": "Iv23lixxRDh1n07wvYsa"
 	},
 	// For sensitive data, use:
 	// wrangler secret put SECRET_NAME
@@ -25,7 +26,7 @@
 			"binding": "DB",
 			"database_name": "i-starred-it-d1",
 			"database_id": "6163f6cb-0de6-4ea1-afd4-73607b0da1f1",
-			"migrations_dir": "./src/db/migrations"
+			"migrations_dir": "../../packages/db/src/migrations"
 		}
 	]
 }

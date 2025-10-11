@@ -132,4 +132,10 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  button {
+    cursor: pointer;
+    &:is([disabled]) {
+      cursor: not-allowed;
+    }
+  }
 }

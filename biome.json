@@ -26,8 +26,24 @@
   "extends": ["ultracite"],
   "linter": {
     "rules": {
+      "correctness": {
+        "noUnusedVariables": {
+          "level": "error",
+          "fix": "none"
+        }
+      },
       "suspicious": {
-        "noUnknownAtRules": "off"
+        "noUnknownAtRules": "off",
+        "noConsole": {
+          "level": "error",
+          "fix": "none"
+        }
+      },
+      "nursery": {
+        "useImageSize": "off"
+      },
+      "performance": {
+        "noImgElement": "off"
       }
     }
   }
