@@ -1,4 +1,4 @@
-// biome-ignore lint/performance/noNamespaceImport: radix-ui
+/** biome-ignore-all lint/performance/noNamespaceImport: radix-ui */
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import type * as React from "react";
 

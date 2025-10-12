@@ -8,8 +8,7 @@ import Loader from "@/components/loader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import Stack from "@/components/ui/stack";
-import { StarredRepositoriesPanel } from "@/features/github/starred-repositories-panel";
-import { SearchPanel } from "@/features/search/search-panel";
+import { PromptSearch } from "@/features/search/prompt-search";
 import { authClient } from "@/lib/auth-client";
 
 export const Route = createFileRoute("/")({
@@ -25,12 +24,7 @@ function HomeComponent() {
 
       <div className="grid gap-6">
         <AuthSection />
-        {session ? (
-          <div className="grid gap-6">
-            <SearchPanel />
-            <StarredRepositoriesPanel />
-          </div>
-        ) : null}
+        {session ? <PromptSearch /> : null}
       </div>
     </div>
   );

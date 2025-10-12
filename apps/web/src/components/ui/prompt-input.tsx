@@ -1,10 +1,15 @@
+/** biome-ignore-all lint/a11y/useKeyWithClickEvents: prompt-kit */
+/** biome-ignore-all lint/correctness/useExhaustiveDependencies: prompt-kit */
+/** biome-ignore-all lint/style/useBlockStatements: prompt-kit */
+/** biome-ignore-all lint/suspicious/noEmptyBlockStatements: prompt-kit */
+/** biome-ignore-all lint/a11y/noStaticElementInteractions: prompt-kit */
+/** biome-ignore-all lint/a11y/noNoninteractiveElementInteractions: prompt-kit */
 "use client";
 
 import React, {
   createContext,
   useContext,
   useEffect,
-  useId,
   useRef,
   useState,
 } from "react";
@@ -30,9 +35,7 @@ type PromptInputContextType = {
 const PromptInputContext = createContext<PromptInputContextType>({
   isLoading: false,
   value: "",
-  setValue: () => {
-    throw new Error("setValue must be used within a PromptInput");
-  },
+  setValue: () => {},
   maxHeight: 240,
   onSubmit: undefined,
   disabled: false,
@@ -55,7 +58,6 @@ type PromptInputProps = {
   onSubmit?: () => void;
   children: React.ReactNode;
   className?: string;
-  disabled?: boolean;
 };
 
 function PromptInput({
@@ -66,11 +68,9 @@ function PromptInput({
   onValueChange,
   onSubmit,
   children,
-  disabled = false,
 }: PromptInputProps) {
   const [internalValue, setInternalValue] = useState(value || "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const textareaId = useId();
 
   const handleChange = (newValue: string) => {
     setInternalValue(newValue);
@@ -86,19 +86,18 @@ function PromptInput({
           setValue: onValueChange ?? handleChange,
           maxHeight,
           onSubmit,
-          disabled,
           textareaRef,
         }}
       >
-        <label
+        <div
           className={cn(
             "cursor-text rounded-3xl border border-input bg-background p-2 shadow-xs",
             className
           )}
-          htmlFor={textareaId}
+          onClick={() => textareaRef.current?.focus()}
         >
           {children}
-        </label>
+        </div>
       </PromptInputContext.Provider>
     </TooltipProvider>
   );
@@ -118,25 +117,19 @@ function PromptInputTextarea({
     usePromptInput();
 
   useEffect(() => {
-    if (disableAutosize) {
-      return;
+    if (disableAutosize) return;
+
+    if (!textareaRef.current) return;
+
+    if (textareaRef.current.scrollTop === 0) {
+      textareaRef.current.style.height = "auto";
     }
 
-    const textarea = textareaRef.current;
-
-    if (!textarea) {
-      return;
-    }
-
-    if (textarea.scrollTop === 0) {
-      textarea.style.height = "auto";
-    }
-
-    textarea.style.height =
+    textareaRef.current.style.height =
       typeof maxHeight === "number"
-        ? `${Math.min(textarea.scrollHeight, maxHeight)}px`
-        : `min(${textarea.scrollHeight}px, ${maxHeight})`;
-  }, [disableAutosize, maxHeight, textareaRef]);
+        ? `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`
+        : `min(${textareaRef.current.scrollHeight}px, ${maxHeight})`;
+  }, [value, maxHeight, disableAutosize]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -149,7 +142,7 @@ function PromptInputTextarea({
   return (
     <Textarea
       className={cn(
-        "min-h-[44px] w-full resize-none border-none bg-transparent text-primary shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+        "min-h-[44px] w-full resize-none border-none bg-transparent text-primary shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-transparent",
         className
       )}
       disabled={disabled}
