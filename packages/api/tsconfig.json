@@ -7,5 +7,6 @@
     "sourceMap": true,
     "outDir": "dist",
     "composite": true
-  }
+  },
+  "include": ["src/**/*", "../../global.d.ts"]
 }

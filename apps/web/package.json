@@ -21,6 +21,8 @@
     "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "^1.9.3",
     "@radix-ui/react-avatar": "^1.1.10",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-form": "^1.23.7",

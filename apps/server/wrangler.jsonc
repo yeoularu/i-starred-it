@@ -9,18 +9,6 @@
 		"BETTER_AUTH_URL": "https://i-starred-it-server.yeoularu.com",
 		"GITHUB_CLIENT_ID": "Iv23lixxRDh1n07wvYsa"
 	},
-	// For sensitive data, use:
-	// wrangler secret put SECRET_NAME
-	// Don't add secrets to "vars" - they're visible in the dashboard!
-
-	// To set up D1 database:
-	// 1. Run: wrangler login
-	// 2. Run: wrangler d1 create your-database-name
-	// 3. Copy the output and paste below
-	// Then run migrations:
-	// bun db:generate
-	// To apply migrations locally, run:
-	// wrangler d1 migrations apply YOUR_DB_NAME --local
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -28,5 +16,9 @@
 			"database_id": "6163f6cb-0de6-4ea1-afd4-73607b0da1f1",
 			"migrations_dir": "../../packages/db/src/migrations"
 		}
-	]
+	],
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  }
 }

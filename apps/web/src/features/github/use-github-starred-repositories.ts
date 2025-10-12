@@ -33,6 +33,10 @@ const DEFAULT_METRICS: FetchMetrics = {
     requests: 0,
     durationMs: 0,
   },
+  cdnReadme: {
+    requests: 0,
+    durationMs: 0,
+  },
 };
 
 const buildStorageKey = (userId: string) => `${STORAGE_PREFIX}:${userId}`;
