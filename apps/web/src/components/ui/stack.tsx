@@ -115,7 +115,7 @@ export default function Stack({
                 scale: 1 + index * 0.06 - cards.length * 0.06,
                 transformOrigin: "90% 90%",
               }}
-              className="overflow-hidden rounded-2xl border-4 border-white"
+              className="overflow-hidden rounded-2xl border-2 dark:border-4 dark:border-foreground"
               initial={false}
               onClick={() => sendToBackOnClick && sendToBack(card.id)}
               style={{
