@@ -13,21 +13,21 @@
     "db:migrate:local": "wrangler d1 migrations apply i-starred-it-d1 --local"
   },
   "dependencies": {
-    "hono": "catalog:",
-    "@orpc/server": "catalog:",
+    "@i-starred-it/api": "workspace:*",
+    "@i-starred-it/auth": "workspace:*",
+    "@i-starred-it/db": "workspace:*",
     "@orpc/openapi": "catalog:",
+    "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
-    "zod": "catalog:",
-    "@i-starred-it/api": "workspace:*",
-    "@i-starred-it/auth": "workspace:*",
-    "@i-starred-it/db": "workspace:*"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:",
+    "@types/node": "^24.7.2",
     "tsdown": "catalog:",
-    "wrangler": "^4.40.3",
-    "@types/node": "^22.13.11"
+    "typescript": "catalog:",
+    "wrangler": "^4.42.2"
   }
 }
