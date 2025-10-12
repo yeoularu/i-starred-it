@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare": "husky install",
     "check": "biome check --write .",
     "dev": "turbo dev",
     "build": "turbo build",
