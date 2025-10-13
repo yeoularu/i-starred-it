@@ -5,6 +5,8 @@ import type { RepositorySearchResult } from "./repository-search-engine";
 import { useRepositorySearch } from "./use-repository-search";
 import { type KeywordResult, useSearchKeywords } from "./use-search-keywords";
 
+const MAX_QUERY_LENGTH = 1000;
+
 type PromptSearchRepositoryStatusArgs = {
   isLoading: boolean;
   error: string | null;
@@ -29,6 +31,9 @@ export type PromptSearchState = {
   indexedCount: number;
   hasSubmitted: boolean;
   originalQuery: string | null;
+  isQueryTooLong: boolean;
+  queryLength: number;
+  maxQueryLength: number;
 };
 
 function resolveErrorMessage(value: unknown): string | null {
@@ -82,6 +87,10 @@ export function usePromptSearchState(): PromptSearchState {
       return;
     }
 
+    if (trimmed.length > MAX_QUERY_LENGTH) {
+      return;
+    }
+
     setHasSubmitted(true);
     keywords.submit();
   }, [keywords]);
@@ -114,7 +123,10 @@ export function usePromptSearchState(): PromptSearchState {
   });
 
   const keywordError = keywords.error?.message ?? null;
-  const canSubmit = keywords.input.trim().length > 0 && !keywords.isPending;
+  const queryLength = keywords.input.length;
+  const isQueryTooLong = queryLength > MAX_QUERY_LENGTH;
+  const canSubmit =
+    keywords.input.trim().length > 0 && !keywords.isPending && !isQueryTooLong;
   const canClear = Boolean(keywords.input || keywords.result || hasSubmitted);
 
   return {
@@ -135,5 +147,8 @@ export function usePromptSearchState(): PromptSearchState {
     indexedCount: repositorySearch.indexedCount,
     hasSubmitted,
     originalQuery: keywords.result?.originalQuery ?? null,
+    isQueryTooLong,
+    queryLength,
+    maxQueryLength: MAX_QUERY_LENGTH,
   };
 }

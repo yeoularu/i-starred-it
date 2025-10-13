@@ -1,0 +1,1 @@
+ALTER TABLE `search_queries` ADD `deleted_at` integer;

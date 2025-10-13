@@ -14,4 +14,5 @@ export const searchQueries = sqliteTable("search_queries", {
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
 });

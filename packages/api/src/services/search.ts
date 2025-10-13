@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { db } from "@i-starred-it/db";
 import { searchQueries } from "@i-starred-it/db/schema/search";
-import { sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 const DEFAULT_MODEL = "@cf/openai/gpt-oss-20b";
 const REQUEST_TIMEOUT_MS = 10_000;
+const DAILY_SEARCH_LIMIT = 20;
 
 export type GenerateKeywordsInput = {
   query: string;
@@ -17,7 +18,17 @@ export type GenerateKeywordsResult = {
   model: string;
 };
 
+export type SearchHistoryItem = {
+  id: string;
+  originalQuery: string;
+  keywords: string[];
+  model: string;
+  createdAt: Date;
+};
+
 export class KeywordGenerationError extends Error {}
+export class SearchHistoryError extends Error {}
+export class RateLimitError extends Error {}
 
 export type WorkersAi = typeof env.AI;
 
@@ -28,6 +39,35 @@ type PersistArgs = {
   userId?: string;
 };
 
+async function checkRateLimit(userId?: string): Promise<void> {
+  if (!userId) {
+    return;
+  }
+
+  // Get UTC start of today (00:00:00 UTC)
+  const now = new Date();
+  const todayUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+
+  const recentSearches = await db
+    .select()
+    .from(searchQueries)
+    .where(
+      and(
+        eq(searchQueries.userId, userId),
+        isNull(searchQueries.deletedAt),
+        sql`${searchQueries.createdAt} >= ${todayUTC.toISOString()}`
+      )
+    );
+
+  if (recentSearches.length >= DAILY_SEARCH_LIMIT) {
+    throw new RateLimitError(
+      `Daily search limit (${DAILY_SEARCH_LIMIT}) exceeded. Resets at UTC midnight.`
+    );
+  }
+}
+
 export async function generateKeywords(
   { query, userId }: GenerateKeywordsInput,
   ai: WorkersAi = env.AI
@@ -37,6 +77,9 @@ export async function generateKeywords(
   if (!normalizedQuery) {
     throw new KeywordGenerationError("Query must not be empty");
   }
+
+  // Check rate limit before generating keywords
+  await checkRateLimit(userId);
 
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -164,7 +207,7 @@ function buildPrompt(query: string): string {
   return `BM25 ranks documents by exact keyword matches, so we need clean, high-signal tokens. Analyze the following natural language query and produce a JSON array of representative keywords or short phrases optimized for BM25 scoring.
 
 Search target:
-- GitHub repositories, including repository names, descriptions, READMEs, topics, languages, and owner.
+- GitHub repositories, including repository names, descriptions, READMEs, and owner.
 
 Return a response with this exact JSON schema:
 {
@@ -179,6 +222,85 @@ Requirements:
 - Add additional keywords that improve retrieval even if they are not explicitly mentioned in the query.
 
 Query: "${query}"`;
+}
+
+export async function getSearchHistory(
+  userId: string
+): Promise<SearchHistoryItem[]> {
+  if (!userId) {
+    throw new SearchHistoryError("User ID required");
+  }
+
+  const records = await db
+    .select({
+      id: searchQueries.id,
+      originalQuery: searchQueries.originalQuery,
+      generatedKeywords: searchQueries.generatedKeywords,
+      model: searchQueries.model,
+      createdAt: searchQueries.createdAt,
+    })
+    .from(searchQueries)
+    .where(
+      and(eq(searchQueries.userId, userId), isNull(searchQueries.deletedAt))
+    )
+    .orderBy(desc(searchQueries.createdAt));
+
+  return records.map((record) => {
+    try {
+      const parsedKeywords = JSON.parse(record.generatedKeywords) as unknown;
+      const keywords = Array.isArray(parsedKeywords)
+        ? parsedKeywords.filter(
+            (item): item is string => typeof item === "string"
+          )
+        : [];
+
+      return {
+        id: record.id,
+        originalQuery: record.originalQuery,
+        keywords,
+        model: record.model ?? DEFAULT_MODEL,
+        createdAt: record.createdAt,
+      };
+    } catch {
+      return {
+        id: record.id,
+        originalQuery: record.originalQuery,
+        keywords: [],
+        model: record.model ?? DEFAULT_MODEL,
+        createdAt: record.createdAt,
+      };
+    }
+  });
+}
+
+export async function softDeleteSearchQuery(
+  queryId: string,
+  userId: string
+): Promise<void> {
+  if (!queryId) {
+    throw new SearchHistoryError("Query ID required");
+  }
+
+  if (!userId) {
+    throw new SearchHistoryError("User ID required");
+  }
+
+  const [record] = await db
+    .select()
+    .from(searchQueries)
+    .where(and(eq(searchQueries.id, queryId), eq(searchQueries.userId, userId)))
+    .limit(1);
+
+  if (!record) {
+    throw new SearchHistoryError("Search query not found");
+  }
+
+  await db
+    .update(searchQueries)
+    .set({
+      deletedAt: new Date(),
+    })
+    .where(eq(searchQueries.id, queryId));
 }
 
 function parseKeywordsResponse(response: unknown): string[] {

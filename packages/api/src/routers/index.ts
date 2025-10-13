@@ -7,7 +7,13 @@ import {
   GithubResourceLimitError,
   MissingGithubTokenError,
 } from "../services/github";
-import { generateKeywords } from "../services/search";
+import {
+  generateKeywords,
+  getSearchHistory,
+  RateLimitError,
+  SearchHistoryError,
+  softDeleteSearchQuery,
+} from "../services/search";
 
 const MAX_KEYWORD_QUERY_LENGTH = 1000;
 
@@ -50,12 +56,68 @@ export const appRouter = {
       })
     )
     .handler(async ({ context, input }) => {
-      const result = await generateKeywords({
-        query: input.query,
-        userId: context.session?.user?.id,
-      });
+      try {
+        const result = await generateKeywords({
+          query: input.query,
+          userId: context.session?.user?.id,
+        });
 
-      return result;
+        return result;
+      } catch (error) {
+        if (error instanceof RateLimitError) {
+          throw new ORPCError("RESOURCE_EXHAUSTED", {
+            message: error.message,
+          });
+        }
+
+        throw error;
+      }
+    }),
+  getSearchHistory: protectedProcedure.handler(async ({ context }) => {
+    const userId = context.session?.user?.id;
+
+    if (!userId) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+
+    try {
+      const history = await getSearchHistory(userId);
+      return history;
+    } catch (error) {
+      if (error instanceof SearchHistoryError) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  }),
+  deleteSearchQuery: protectedProcedure
+    .input(
+      z.object({
+        queryId: z.string().min(1),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session?.user?.id;
+
+      if (!userId) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
+      try {
+        await softDeleteSearchQuery(input.queryId, userId);
+        return { success: true };
+      } catch (error) {
+        if (error instanceof SearchHistoryError) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: error.message,
+          });
+        }
+
+        throw error;
+      }
     }),
 };
 export type AppRouter = typeof appRouter;
