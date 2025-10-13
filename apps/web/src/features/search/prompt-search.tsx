@@ -18,6 +18,26 @@ import { useSearchHistory } from "./use-search-history";
 
 const HISTORY_ITEM_ANIMATION_DURATION = 0.3;
 
+function getLocalMidnightUTC(): string {
+  const now = new Date();
+  const tomorrow = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0
+    )
+  );
+
+  return tomorrow.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 export function PromptSearch() {
   const state = usePromptSearchState();
   const {
@@ -83,7 +103,7 @@ export function PromptSearch() {
           )}
         >
           Daily search limit reached ({searchesInLast24Hours}/{dailyLimit}).
-          Resets at UTC midnight.
+          Resets at {getLocalMidnightUTC()} (UTC 00:00).
         </div>
       )}
       <PromptInput

@@ -21,8 +21,8 @@
 			"migrations_dir": "../../packages/db/src/migrations"
 		}
 	],
-  "ai": {
-    "binding": "AI",
-    "remote": true
-  }
+  	"ai": {
+    	"binding": "AI",
+    	"remote": true
+  	}
 }
