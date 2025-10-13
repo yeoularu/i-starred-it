@@ -1,0 +1,10 @@
+# robots.txt for i-starred-it
+
+User-agent: *
+Allow: /
+
+# Disallow authentication and API routes
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://yourdomain.com/sitemap.xml

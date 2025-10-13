@@ -28,17 +28,123 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "i-starred-it",
+        title: "I Starred It",
       },
       {
         name: "description",
-        content: "i-starred-it is a web application",
+        content:
+          "I starred it, but I can't find it. Search your GitHub starred repositories using natural language queries powered by AI.",
+      },
+      {
+        name: "keywords",
+        content:
+          "github, starred repositories, search, AI, natural language, repository search, github stars",
+      },
+      {
+        name: "author",
+        content: "yeoularu",
+      },
+      {
+        name: "robots",
+        content: "index, follow",
+      },
+      // Open Graph
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        property: "og:title",
+        content: "I Starred It - AI-Powered GitHub Stars Search",
+      },
+      {
+        property: "og:description",
+        content:
+          "I starred it, but I can't find it. Search your GitHub starred repositories using natural language queries powered by AI.",
+      },
+      {
+        property: "og:site_name",
+        content: "I Starred It",
+      },
+      {
+        property: "og:locale",
+        content: "en_US",
+      },
+      {
+        property: "og:image",
+        content: "/logo.png",
+      },
+      {
+        property: "og:image:alt",
+        content: "I Starred It logo",
+      },
+      // Twitter Card
+      {
+        name: "twitter:card",
+        content: "summary_large_image",
+      },
+      {
+        name: "twitter:title",
+        content: "I Starred It - AI-Powered GitHub Stars Search",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "I starred it, but I can't find it. Search your GitHub starred repositories using natural language queries powered by AI.",
+      },
+      {
+        name: "twitter:image",
+        content: "/logo.png",
+      },
+      {
+        name: "twitter:image:alt",
+        content: "I Starred It logo",
+      },
+      // Theme
+      {
+        name: "theme-color",
+        content: "#0c0c0c",
+      },
+      {
+        name: "color-scheme",
+        content: "dark light",
       },
     ],
     links: [
       {
         rel: "icon",
         href: "/favicon.ico",
+      },
+      {
+        rel: "canonical",
+        href: typeof window !== "undefined" ? window.location.origin : "",
+      },
+    ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          name: "I Starred It",
+          description:
+            "AI-powered search engine for GitHub starred repositories. Search through your stars using natural language queries.",
+          url: typeof window !== "undefined" ? window.location.origin : "",
+          applicationCategory: "DeveloperApplication",
+          operatingSystem: "Web Browser",
+          offers: {
+            "@type": "Offer",
+            price: "0",
+            priceCurrency: "USD",
+          },
+          featureList: [
+            "AI-powered natural language search",
+            "BM25 ranking algorithm",
+            "Search across repository names, descriptions, and READMEs",
+            "GitHub OAuth authentication",
+            "Search history management",
+          ],
+        }),
       },
     ],
   }),
