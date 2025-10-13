@@ -12,8 +12,6 @@ export type StarredRepository = {
   name: string;
   description: string | null;
   readme: string | null;
-  topics: string[];
-  languages: string[];
   stargazerCount: number;
   pushedAt: string;
   updatedAt: string;
@@ -75,18 +73,6 @@ type StarredRepositoriesQuery = {
           forkCount: number;
           pushedAt: string;
           updatedAt: string;
-          repositoryTopics: {
-            nodes: Array<{
-              topic: {
-                name: string | null;
-              } | null;
-            }>;
-          };
-          languages: {
-            nodes: Array<{
-              name: string | null;
-            }>;
-          };
         };
       }[];
     };
@@ -113,18 +99,6 @@ const STARRED_REPOSITORIES_QUERY = `
             forkCount
             pushedAt
             updatedAt
-            repositoryTopics(first: 20) {
-              nodes {
-                topic {
-                  name
-                }
-              }
-            }
-            languages(first: 10) {
-              nodes {
-                name
-              }
-            }
           }
         }
       }
@@ -279,30 +253,12 @@ async function mapEdgeToRepository(
   const { node } = edge;
   const owner = node.owner.login;
   const readme = await resolveReadme(client, owner, node.name, metrics);
-  const topics = Array.from(
-    new Set(
-      node.repositoryTopics.nodes
-        .map((item) => item?.topic?.name ?? "")
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0)
-    )
-  );
-  const languages = Array.from(
-    new Set(
-      node.languages.nodes
-        .map((item) => item?.name ?? "")
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0)
-    )
-  );
 
   return {
     owner,
     name: node.name,
     description: node.description,
     readme,
-    topics,
-    languages,
     stargazerCount: node.stargazerCount,
     forkCount: node.forkCount,
     pushedAt: node.pushedAt,

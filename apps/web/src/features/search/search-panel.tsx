@@ -54,8 +54,8 @@ function SearchPanel() {
           <FieldSet>
             <FieldLegend>Describe your search intent</FieldLegend>
             <FieldDescription>
-              Keywords focus on repository names, descriptions, READMEs, topics,
-              languages, and owners.
+              Keywords focus on repository names, descriptions, READMEs, and
+              owners.
             </FieldDescription>
             <FieldGroup>
               <Field>

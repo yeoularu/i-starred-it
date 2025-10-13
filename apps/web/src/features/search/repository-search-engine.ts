@@ -1,12 +1,6 @@
 import type { StarredRepository } from "@i-starred-it/api/services/github";
 
-type FieldName =
-  | "owner"
-  | "name"
-  | "description"
-  | "readme"
-  | "topics"
-  | "languages";
+type FieldName = "owner" | "name" | "description" | "readme";
 
 type EngineConfig = {
   fieldWeights: Record<FieldName, number>;
@@ -47,8 +41,6 @@ const defaultConfig: EngineConfig = {
     name: 2,
     description: 1.2,
     readme: 0.4,
-    topics: 1.5,
-    languages: 1.3,
   },
   k1: 1.2,
   b: 0.75,
@@ -86,30 +78,6 @@ function tokenize(value: string, limit?: number): string[] {
     return tokens.slice(0, limit);
   }
   return tokens;
-}
-
-function normalizeList(
-  values: string[] | null | undefined,
-  limit?: number
-): string {
-  if (!values) {
-    return "";
-  }
-  const collected: string[] = [];
-  for (const value of values) {
-    if (!value) {
-      continue;
-    }
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-    collected.push(trimmed);
-    if (limit && collected.length >= limit) {
-      break;
-    }
-  }
-  return collected.join(" ");
 }
 
 function uniqueTokens(tokens: Iterable<string>): string[] {
@@ -194,16 +162,6 @@ export class RepositorySearchEngine {
       repository.readme ?? "",
       fieldWeights.readme,
       maxReadmeTokens
-    );
-    this.ingestField(
-      doc,
-      normalizeList(repository.topics, this.config.maxKeywords),
-      fieldWeights.topics
-    );
-    this.ingestField(
-      doc,
-      normalizeList(repository.languages, this.config.maxKeywords),
-      fieldWeights.languages
     );
 
     this.totalCorpusLength += doc.length;
