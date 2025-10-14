@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { RepositorySearchResult } from "./repository-search-engine";
-import { useCheckIfLiked, useRepositoryLike } from "./use-repository-like";
+import { useRepositoryLike } from "./use-repository-like";
 import type { SearchHistoryItem as HistoryItem } from "./use-search-history";
 
 const MAX_PREVIEW_TOKENS = 5;
@@ -35,6 +35,7 @@ const SMOOTH_EASE = [0.4, 0, 0.2, 1] as const;
 type SearchHistoryItemProps = {
   item: HistoryItem;
   searchResults: RepositorySearchResult[];
+  likedReposSet: Set<string>;
   onDelete: (id: string) => void;
   isSearchReady?: boolean;
 };
@@ -44,24 +45,19 @@ function SearchResultItem({
   rank,
   searchQueryId,
   allSearchResults,
+  isLiked = false,
   showTokens = true,
 }: {
   result: RepositorySearchResult;
   rank: number;
   searchQueryId: string;
   allSearchResults: RepositorySearchResult[];
+  isLiked?: boolean;
   showTokens?: boolean;
 }) {
   const { repository, matchedTokens, score } = result;
   const repoUrl = `https://github.com/${repository.owner}/${repository.name}`;
   const { like, unlike, isLiking, isUnliking } = useRepositoryLike();
-
-  // TanStack Query가 캐싱하므로 직접 사용
-  const { data: isLiked = false } = useCheckIfLiked(
-    searchQueryId,
-    repository.owner,
-    repository.name
-  );
 
   const handleLikeToggle = async () => {
     try {
@@ -170,6 +166,7 @@ function SearchResultItem({
 export function SearchHistoryItem({
   item,
   searchResults,
+  likedReposSet,
   onDelete,
   isInitiallyExpanded = false,
   isSearchReady = true,
@@ -327,6 +324,9 @@ export function SearchHistoryItem({
             {/* First item always visible - no animation */}
             <SearchResultItem
               allSearchResults={searchResults}
+              isLiked={likedReposSet.has(
+                `${searchResults[0].repository.owner}/${searchResults[0].repository.name}`
+              )}
               rank={1}
               result={searchResults[0]}
               searchQueryId={item.id}
@@ -381,6 +381,9 @@ export function SearchHistoryItem({
                       <Separator className="mb-3" />
                       <SearchResultItem
                         allSearchResults={searchResults}
+                        isLiked={likedReposSet.has(
+                          `${result.repository.owner}/${result.repository.name}`
+                        )}
                         rank={index + 2}
                         result={result}
                         searchQueryId={item.id}

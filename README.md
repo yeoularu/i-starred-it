@@ -8,10 +8,6 @@ AI-powered search engine for GitHub starred repositories. Find what you need wit
 
 - 🤖 **AI Keyword Generation** - Cloudflare Workers AI converts natural language to search keywords
 - 🔍 **BM25 Search** - Client-side ranking across repo names, descriptions, and READMEs
-- 💾 **Smart Bookmarking** - Like repositories with compressed context snapshots (70% compression via deflate-raw)
-- 📝 **Search History** - Persistent query history with soft delete
-- ⚡ **Rate Limited** - 20 searches/day per user (UTC reset)
-- 🎨 **Modern Stack** - React 19, TanStack Query, ORPC, Cloudflare Workers
 
 ## Tech Stack
 
@@ -79,27 +75,6 @@ pnpm db:generate        # Generate migrations
 pnpm db:migrate:local   # Apply to local D1
 pnpm dev                # Start dev servers (web:3001, api:3000)
 ```
-
-**Note**: For production, uncomment `session.cookieCache` and `advanced.crossSubDomainCookies` in `apps/server/src/lib/auth.ts`.
-
-## Key Features
-
-### Smart Bookmarking
-When you like a repository, the entire search context (top 20 results with READMEs) is compressed and stored:
-- **Compression**: deflate-raw (70% reduction, ~150KB for 20 repos)
-- **ORPC Blob Support**: Native binary transfer without Base64 overhead
-- **Context Preservation**: Captures positive/negative signals for future ML
-
-### Client-Side Search
-BM25 algorithm with tuned field weights:
-- Repository name: 5x
-- Description: 3x  
-- README: 1x
-
-### ORPC + TanStack Query Integration
-- Type-safe APIs with automatic query key generation
-- Intelligent caching (1min stale time, 10min GC)
-- Optimistic updates on mutations
 
 ## License
 

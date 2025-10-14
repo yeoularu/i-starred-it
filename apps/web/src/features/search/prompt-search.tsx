@@ -1,6 +1,6 @@
 import { ArrowUp } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   PromptInput,
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useGithubStarredRepositories } from "../github/use-github-starred-repositories";
 import { SearchHistoryItem } from "./search-history-item";
 import { usePromptSearchState } from "./use-prompt-search";
+import { useLikedRepositories } from "./use-repository-like";
 import { useRepositorySearch } from "./use-repository-search";
 import { useSearchHistory } from "./use-search-history";
 
@@ -55,6 +56,17 @@ export function PromptSearch() {
   });
   const [latestQueryId, setLatestQueryId] = useState<string | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // 전역 좋아요 목록 (1번 요청으로 모든 검색히스토리에서 사용)
+  const { data: likedRepos } = useLikedRepositories();
+  const likedReposSet = useMemo(() => {
+    if (!likedRepos) {
+      return new Set<string>();
+    }
+    return new Set(
+      likedRepos.map((like) => `${like.likedOwner}/${like.likedName}`)
+    );
+  }, [likedRepos]);
 
   // Mark initial load as complete when history is loaded
   useEffect(() => {
@@ -234,6 +246,7 @@ export function PromptSearch() {
                       isInitiallyExpanded={item.id === latestQueryId}
                       isSearchReady={isReady}
                       item={item}
+                      likedReposSet={likedReposSet}
                       onDelete={deleteQuery}
                       searchResults={historyResults}
                     />

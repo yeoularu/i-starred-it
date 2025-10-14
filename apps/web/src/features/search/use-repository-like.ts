@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { compressSnapshot } from "@/lib/compression";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 import type { RepositorySearchResult } from "./repository-search-engine";
 
 // biome-ignore lint/style/noMagicNumbers: 밀리초 변환
@@ -11,6 +11,7 @@ const LIKE_STATUS_GC_TIME = 10 * 60 * 1000; // 10분
 export function useRepositoryLike() {
   const queryClient = useQueryClient();
 
+  // like는 압축 전처리가 필요해서 커스텀 mutationFn 사용
   const likeMutation = useMutation({
     mutationFn: async ({
       searchQueryId,
@@ -31,36 +32,28 @@ export function useRepositoryLike() {
         likedName
       );
 
-      // @ts-expect-error Browser Blob vs Node.js Buffer.Blob type mismatch
-      return await orpc.likeRepository.query({
-        input: {
-          searchQueryId,
-          likedOwner,
-          likedName,
-          likedRank,
-          compressedSnapshot,
-        },
+      return await client.likeRepository({
+        searchQueryId,
+        likedOwner,
+        likedName,
+        likedRank,
+        // @ts-expect-error Browser Blob vs Node.js Buffer.Blob type mismatch
+        compressedSnapshot,
       });
     },
     onSuccess: () => {
-      // ORPC 자동 쿼리 키 사용
       queryClient.invalidateQueries({
         queryKey: orpc.getLikedRepositories.key(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: orpc.checkIfRepositoryLiked.key(),
       });
     },
   });
 
+  // unlike는 ORPC mutationOptions 사용
   const unlikeMutation = useMutation(
     orpc.unlikeRepository.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({
           queryKey: orpc.getLikedRepositories.key(),
-        });
-        queryClient.invalidateQueries({
-          queryKey: orpc.checkIfRepositoryLiked.key(),
         });
       },
     })
@@ -96,6 +89,8 @@ export function useRepositoryLikes(
   return useQuery(
     orpc.getRepositoryLikes.queryOptions({
       input: { searchQueryId, repositories },
+      staleTime: LIKE_STATUS_STALE_TIME,
+      gcTime: LIKE_STATUS_GC_TIME,
     })
   );
 }
