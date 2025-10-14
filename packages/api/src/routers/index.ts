@@ -10,6 +10,14 @@ import {
   MissingGithubTokenError,
 } from "../services/github";
 import {
+  checkIfRepositoryLiked,
+  getLikedRepositories,
+  getLikeStatusForRepositories,
+  LikeError,
+  likeRepository,
+  unlikeRepository,
+} from "../services/likes";
+import {
   generateKeywords,
   getSearchHistory,
   RateLimitError,
@@ -186,6 +194,144 @@ export const appRouter = {
 
         throw error;
       }
+    }),
+  likeRepository: protectedProcedure
+    .input(
+      z.object({
+        searchQueryId: z.string().min(1),
+        likedOwner: z.string().min(1),
+        likedName: z.string().min(1),
+        likedRank: z.number(),
+        compressedSnapshot: z.instanceof(Blob),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session?.user?.id;
+
+      if (!userId) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
+      try {
+        const buffer = Buffer.from(
+          await input.compressedSnapshot.arrayBuffer()
+        );
+
+        const likeId = await likeRepository({
+          userId,
+          searchQueryId: input.searchQueryId,
+          likedOwner: input.likedOwner,
+          likedName: input.likedName,
+          likedRank: input.likedRank,
+          compressedSnapshot: buffer,
+        });
+        return { likeId };
+      } catch (error) {
+        if (error instanceof LikeError) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: error.message,
+          });
+        }
+
+        throw error;
+      }
+    }),
+  unlikeRepository: protectedProcedure
+    .input(
+      z.object({
+        searchQueryId: z.string().min(1),
+        likedOwner: z.string().min(1),
+        likedName: z.string().min(1),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session?.user?.id;
+
+      if (!userId) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
+      try {
+        await unlikeRepository(
+          userId,
+          input.searchQueryId,
+          input.likedOwner,
+          input.likedName
+        );
+        return { success: true };
+      } catch (error) {
+        if (error instanceof LikeError) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: error.message,
+          });
+        }
+
+        throw error;
+      }
+    }),
+  getLikedRepositories: protectedProcedure.handler(async ({ context }) => {
+    const userId = context.session?.user?.id;
+
+    if (!userId) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+
+    try {
+      const likes = await getLikedRepositories(userId);
+      return likes;
+    } catch (error) {
+      if (error instanceof LikeError) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  }),
+  checkIfRepositoryLiked: protectedProcedure
+    .input(
+      z.object({
+        searchQueryId: z.string().min(1),
+        likedOwner: z.string().min(1),
+        likedName: z.string().min(1),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session?.user?.id;
+
+      if (!userId) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
+      const isLiked = await checkIfRepositoryLiked(
+        userId,
+        input.searchQueryId,
+        input.likedOwner,
+        input.likedName
+      );
+      return { isLiked };
+    }),
+  getRepositoryLikes: protectedProcedure
+    .input(
+      z.object({
+        searchQueryId: z.string().min(1),
+        repositories: z.array(repositoryIdentifierSchema),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session?.user?.id;
+
+      if (!userId) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
+      const likes = await getLikeStatusForRepositories(
+        userId,
+        input.searchQueryId,
+        input.repositories
+      );
+      return likes;
     }),
 };
 export type AppRouter = typeof appRouter;

@@ -40,7 +40,7 @@ function HomeComponent() {
 }
 
 function AboutSection() {
-  // biome-ignore lint/style/noMagicNumbers: about image sizes
+  // biome-ignore lint/style/noMagicNumbers: 이미지 원본 크기
   const imgRatio = 425 / 848;
   const defaultWidth = 480;
   const [isDismissed, setIsDismissed] = useLocalStorage(

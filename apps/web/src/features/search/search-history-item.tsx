@@ -1,4 +1,4 @@
-import { ChevronRight, Quote, Target, Trash2 } from "lucide-react";
+import { ChevronRight, Quote, Target, ThumbsUp, Trash2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { RepositorySearchResult } from "./repository-search-engine";
+import { useCheckIfLiked, useRepositoryLike } from "./use-repository-like";
 import type { SearchHistoryItem as HistoryItem } from "./use-search-history";
 
 const MAX_PREVIEW_TOKENS = 5;
@@ -28,7 +29,7 @@ const EXPAND_DURATION = 0.2;
 const COLLAPSE_DURATION = 0.15;
 const EXPAND_OPACITY_RATIO = 0.7;
 const COLLAPSE_OPACITY_RATIO = 0.5;
-// biome-ignore lint/style/noMagicNumbers: Cubic bezier easing values
+// biome-ignore lint/style/noMagicNumbers: Cubic bezier 값
 const SMOOTH_EASE = [0.4, 0, 0.2, 1] as const;
 
 type SearchHistoryItemProps = {
@@ -41,14 +42,48 @@ type SearchHistoryItemProps = {
 function SearchResultItem({
   result,
   rank,
+  searchQueryId,
+  allSearchResults,
   showTokens = true,
 }: {
   result: RepositorySearchResult;
   rank: number;
+  searchQueryId: string;
+  allSearchResults: RepositorySearchResult[];
   showTokens?: boolean;
 }) {
   const { repository, matchedTokens, score } = result;
   const repoUrl = `https://github.com/${repository.owner}/${repository.name}`;
+  const { like, unlike, isLiking, isUnliking } = useRepositoryLike();
+
+  // TanStack Query가 캐싱하므로 직접 사용
+  const { data: isLiked = false } = useCheckIfLiked(
+    searchQueryId,
+    repository.owner,
+    repository.name
+  );
+
+  const handleLikeToggle = async () => {
+    try {
+      if (isLiked) {
+        await unlike({
+          searchQueryId,
+          likedOwner: repository.owner,
+          likedName: repository.name,
+        });
+      } else {
+        await like({
+          searchQueryId,
+          searchResults: allSearchResults,
+          likedOwner: repository.owner,
+          likedName: repository.name,
+          likedRank: rank,
+        });
+      }
+    } catch {
+      // Error is handled by the mutation
+    }
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -108,6 +143,25 @@ function SearchResultItem({
             </div>
           )}
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className={cn(
+                "size-8 shrink-0 transition-colors",
+                isLiked
+                  ? "text-primary hover:text-primary/80"
+                  : "text-muted-foreground hover:text-primary"
+              )}
+              disabled={isLiking || isUnliking}
+              onClick={handleLikeToggle}
+              size="icon"
+              variant="ghost"
+            >
+              <ThumbsUp className={cn("size-4", isLiked && "fill-current")} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isLiked ? "Cancel" : "Found it!"}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );
@@ -272,8 +326,10 @@ export function SearchHistoryItem({
           <div>
             {/* First item always visible - no animation */}
             <SearchResultItem
+              allSearchResults={searchResults}
               rank={1}
               result={searchResults[0]}
+              searchQueryId={item.id}
               showTokens={true}
             />
 
@@ -324,8 +380,10 @@ export function SearchHistoryItem({
                     <div className="mt-3">
                       <Separator className="mb-3" />
                       <SearchResultItem
+                        allSearchResults={searchResults}
                         rank={index + 2}
                         result={result}
+                        searchQueryId={item.id}
                         showTokens={true}
                       />
                     </div>
