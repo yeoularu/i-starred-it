@@ -27,6 +27,7 @@ type MockGitHubClient = {
   client: GitHubClient;
   graphql: ReturnType<typeof vi.fn>;
   getReadme: ReturnType<typeof vi.fn>;
+  listReposStarredByAuthenticatedUser: ReturnType<typeof vi.fn>;
 };
 
 const HTTP_STATUS_NOT_FOUND = 404;
@@ -35,10 +36,14 @@ const TEST_REPOSITORIES_OVER_LIMIT = 60;
 const TEST_PARALLEL_REQUESTS_COUNT = 5;
 const TEST_DELAY_MS = 10;
 const TEST_TIMEOUT_MS = 100;
+const TEST_PAGINATION_TOTAL_PAGES = 3;
+const TEST_SINGLE_PAGE = 1;
+const TEST_PAGE_TWO = 2;
 
 const createMockGitHubClient = (): MockGitHubClient => {
   const graphql = vi.fn();
   const getReadme = vi.fn();
+  const listReposStarredByAuthenticatedUser = vi.fn();
 
   const client = {
     graphql: graphql as unknown as GitHubClient["graphql"],
@@ -46,10 +51,13 @@ const createMockGitHubClient = (): MockGitHubClient => {
       repos: {
         getReadme,
       },
+      activity: {
+        listReposStarredByAuthenticatedUser,
+      },
     },
   } as unknown as GitHubClient;
 
-  return { client, graphql, getReadme };
+  return { client, graphql, getReadme, listReposStarredByAuthenticatedUser };
 };
 
 const createGraphqlResponse = ({
@@ -94,6 +102,45 @@ const createEdge = ({
     forkCount: 0,
     pushedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+  },
+});
+
+const createRestStarredItem = ({
+  owner,
+  name,
+  description,
+  starredAt,
+}: {
+  owner: string;
+  name: string;
+  description: string | null;
+  starredAt: string;
+}) => ({
+  starred_at: starredAt,
+  repo: {
+    name,
+    owner: {
+      login: owner,
+    },
+    description,
+    stargazers_count: 0,
+    forks_count: 0,
+    pushed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+});
+
+const createRestStarredResponse = (
+  items: ReturnType<typeof createRestStarredItem>[],
+  page: number,
+  totalPages: number
+) => ({
+  data: items,
+  headers: {
+    link:
+      totalPages > 1
+        ? `<https://api.github.com/user/starred?per_page=100&page=${page + 1}>; rel="next", <https://api.github.com/user/starred?per_page=100&page=${totalPages}>; rel="last"`
+        : undefined,
   },
 });
 
@@ -357,12 +404,13 @@ describe("fetchStarredRepositoriesForUser", () => {
 });
 
 describe("fetchStarredRepositoriesWithoutReadme", () => {
-  let graphql: ReturnType<typeof vi.fn>;
+  let listReposStarredByAuthenticatedUser: ReturnType<typeof vi.fn>;
   let client: GitHubClient;
 
   beforeEach(() => {
     const mocks = createMockGitHubClient();
-    graphql = mocks.graphql;
+    listReposStarredByAuthenticatedUser =
+      mocks.listReposStarredByAuthenticatedUser;
     client = mocks.client;
   });
 
@@ -371,23 +419,26 @@ describe("fetchStarredRepositoriesWithoutReadme", () => {
   });
 
   it("returns repositories without fetching README", async () => {
-    graphql.mockResolvedValueOnce(
-      createGraphqlResponse({
-        edges: [
-          createEdge({
+    const now = new Date().toISOString();
+    listReposStarredByAuthenticatedUser.mockResolvedValueOnce(
+      createRestStarredResponse(
+        [
+          createRestStarredItem({
             owner: "octocat",
             name: "hello-world",
             description: "First repo",
-            starredAt: new Date().toISOString(),
+            starredAt: now,
           }),
-          createEdge({
+          createRestStarredItem({
             owner: "octocat",
             name: "second-repo",
             description: "Second repo",
-            starredAt: new Date().toISOString(),
+            starredAt: now,
           }),
         ],
-      })
+        TEST_SINGLE_PAGE,
+        TEST_SINGLE_PAGE
+      )
     );
 
     const result = await fetchStarredRepositoriesWithoutReadme(client);
@@ -406,44 +457,64 @@ describe("fetchStarredRepositoriesWithoutReadme", () => {
         readme: null,
       }),
     ]);
-    expect(result.metrics.graphql.requests).toBe(1);
+    expect(result.metrics.rest.requests).toBe(TEST_SINGLE_PAGE);
     expect(result.metrics.restReadme.requests).toBe(0);
     expect(result.metrics.cdnReadme.requests).toBe(0);
   });
 
-  it("handles pagination correctly", async () => {
+  it("handles pagination correctly with parallel requests", async () => {
     const now = new Date().toISOString();
-    graphql
-      .mockResolvedValueOnce(
-        createGraphqlResponse({
-          hasNextPage: true,
-          endCursor: "cursor-1",
-          edges: [
-            createEdge({
-              owner: "octocat",
-              name: "repo-1",
-              description: "Repo 1",
-              starredAt: now,
-            }),
-          ],
-        })
+
+    // 첫 페이지 응답 (총 3페이지)
+    listReposStarredByAuthenticatedUser.mockResolvedValueOnce(
+      createRestStarredResponse(
+        [
+          createRestStarredItem({
+            owner: "octocat",
+            name: "repo-1",
+            description: "Repo 1",
+            starredAt: now,
+          }),
+        ],
+        TEST_SINGLE_PAGE,
+        TEST_PAGINATION_TOTAL_PAGES
       )
+    );
+
+    // 2, 3페이지 응답 (병렬)
+    listReposStarredByAuthenticatedUser
       .mockResolvedValueOnce(
-        createGraphqlResponse({
-          edges: [
-            createEdge({
+        createRestStarredResponse(
+          [
+            createRestStarredItem({
               owner: "octocat",
               name: "repo-2",
               description: "Repo 2",
               starredAt: now,
             }),
           ],
-        })
+          TEST_PAGE_TWO,
+          TEST_PAGINATION_TOTAL_PAGES
+        )
+      )
+      .mockResolvedValueOnce(
+        createRestStarredResponse(
+          [
+            createRestStarredItem({
+              owner: "octocat",
+              name: "repo-3",
+              description: "Repo 3",
+              starredAt: now,
+            }),
+          ],
+          TEST_PAGINATION_TOTAL_PAGES,
+          TEST_PAGINATION_TOTAL_PAGES
+        )
       );
 
     const result = await fetchStarredRepositoriesWithoutReadme(client);
 
-    expect(result.repositories).toHaveLength(2);
+    expect(result.repositories).toHaveLength(TEST_PAGINATION_TOTAL_PAGES);
     expect(result.repositories).toEqual([
       expect.objectContaining({
         owner: "octocat",
@@ -455,9 +526,16 @@ describe("fetchStarredRepositoriesWithoutReadme", () => {
         name: "repo-2",
         readme: null,
       }),
+      expect.objectContaining({
+        owner: "octocat",
+        name: "repo-3",
+        readme: null,
+      }),
     ]);
-    expect(graphql).toHaveBeenCalledTimes(2);
-    expect(result.metrics.graphql.requests).toBe(2);
+    expect(listReposStarredByAuthenticatedUser).toHaveBeenCalledTimes(
+      TEST_PAGINATION_TOTAL_PAGES
+    );
+    expect(result.metrics.rest.requests).toBe(TEST_PAGINATION_TOTAL_PAGES);
   });
 });
 

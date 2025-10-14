@@ -40,6 +40,10 @@ const DEFAULT_METRICS: ExtendedFetchMetrics = {
     requests: 0,
     durationMs: 0,
   },
+  rest: {
+    requests: 0,
+    durationMs: 0,
+  },
   restReadme: {
     requests: 0,
     durationMs: 0,
@@ -152,6 +156,10 @@ async function fetchAllStarredRepositories(): Promise<{
       requests: 0,
       durationMs: 0,
     },
+    rest: {
+      requests: 0,
+      durationMs: 0,
+    },
     restReadme: {
       requests: 0,
       durationMs: 0,
@@ -169,6 +177,8 @@ async function fetchAllStarredRepositories(): Promise<{
 
   metrics.graphql.requests += step1Metrics.graphql.requests;
   metrics.graphql.durationMs += step1Metrics.graphql.durationMs;
+  metrics.rest.requests += step1Metrics.rest.requests;
+  metrics.rest.durationMs += step1Metrics.rest.durationMs;
 
   const cdnStartedAt = Date.now();
   const cdnResults = await Promise.all(

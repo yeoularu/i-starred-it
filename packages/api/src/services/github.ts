@@ -6,6 +6,7 @@ import { Octokit } from "octokit";
 const GITHUB_PROVIDER_ID = "github";
 const PAGE_SIZE = 100;
 const HTTP_STATUS_NOT_FOUND = 404;
+const LINK_HEADER_LAST_PAGE_REGEX = /<[^>]*[?&]page=(\d+)[^>]*>; rel="last"/;
 
 export type StarredRepository = {
   owner: string;
@@ -36,6 +37,10 @@ type GitHubClient = Pick<Octokit, "graphql" | "rest">;
 export type FetchMetrics = {
   totalDurationMs: number;
   graphql: {
+    requests: number;
+    durationMs: number;
+  };
+  rest: {
     requests: number;
     durationMs: number;
   };
@@ -196,6 +201,10 @@ export async function fetchStarredRepositories(
       requests: 0,
       durationMs: 0,
     },
+    rest: {
+      requests: 0,
+      durationMs: 0,
+    },
     restReadme: {
       requests: 0,
       durationMs: 0,
@@ -236,6 +245,10 @@ export async function fetchStarredRepositoriesWithoutReadme(
       requests: 0,
       durationMs: 0,
     },
+    rest: {
+      requests: 0,
+      durationMs: 0,
+    },
     restReadme: {
       requests: 0,
       durationMs: 0,
@@ -246,12 +259,7 @@ export async function fetchStarredRepositoriesWithoutReadme(
     },
   };
   const startedAt = Date.now();
-  const repositories = await collectStarredRepositoriesWithoutReadme(
-    client,
-    null,
-    [],
-    metrics
-  );
+  const repositories = await collectStarredRepositoriesViaRest(client, metrics);
   metrics.totalDurationMs = Date.now() - startedAt;
 
   if (options?.onMetrics) {
@@ -367,53 +375,102 @@ async function collectStarredRepositories(
   return await collectStarredRepositories(client, endCursor, nextAcc, metrics);
 }
 
-async function collectStarredRepositoriesWithoutReadme(
+type RestStarredResponse = Array<{
+  starred_at: string;
+  repo: {
+    name: string;
+    owner: {
+      login: string;
+    };
+    description: string | null;
+    stargazers_count: number;
+    forks_count: number;
+    pushed_at: string;
+    updated_at: string;
+  };
+}>;
+
+async function collectStarredRepositoriesViaRest(
   client: GitHubClient,
-  cursor: string | null,
-  acc: StarredRepository[],
   metrics: FetchMetrics
 ): Promise<StarredRepository[]> {
-  const graphqlStartedAt = Date.now();
-  let response: StarredRepositoriesQuery;
-  try {
-    response = await client.graphql<StarredRepositoriesQuery>(
-      STARRED_REPOSITORIES_QUERY,
-      {
-        cursor,
-        pageSize: PAGE_SIZE,
-      }
+  // 1. 첫 요청으로 총 페이지 수 파악
+  const startedAt = Date.now();
+  const firstResponse =
+    await client.rest.activity.listReposStarredByAuthenticatedUser({
+      per_page: PAGE_SIZE,
+      page: 1,
+      headers: {
+        accept: "application/vnd.github.star+json",
+      },
+    });
+  metrics.rest.requests += 1;
+  metrics.rest.durationMs += Date.now() - startedAt;
+
+  // Link 헤더에서 마지막 페이지 번호 파싱
+  const totalPages = parseTotalPagesFromLinkHeader(firstResponse.headers.link);
+
+  // 첫 페이지 데이터
+  const firstPageData = firstResponse.data as unknown as RestStarredResponse;
+  let allRepositories = firstPageData.map(mapRestResponseToRepository);
+
+  // 2페이지 이상이면 병렬로 가져오기
+  if (totalPages > 1) {
+    const parallelStartedAt = Date.now();
+    const pagePromises = Array.from(
+      { length: totalPages - 1 },
+      (_, i) => i + 2
+    ).map((pageNumber) =>
+      client.rest.activity.listReposStarredByAuthenticatedUser({
+        per_page: PAGE_SIZE,
+        page: pageNumber,
+        headers: {
+          accept: "application/vnd.github.star+json",
+        },
+      })
     );
-  } catch (error) {
-    if (isResourceLimitError(error)) {
-      throw new GithubResourceLimitError();
+
+    const responses = await Promise.all(pagePromises);
+    metrics.rest.requests += responses.length;
+    metrics.rest.durationMs += Date.now() - parallelStartedAt;
+
+    for (const response of responses) {
+      const data = response.data as unknown as RestStarredResponse;
+      allRepositories = allRepositories.concat(
+        data.map(mapRestResponseToRepository)
+      );
     }
-
-    throw error;
-  }
-  metrics.graphql.requests += 1;
-  metrics.graphql.durationMs += Date.now() - graphqlStartedAt;
-
-  const {
-    pageInfo: { endCursor, hasNextPage },
-    edges,
-  } = response.viewer.starredRepositories;
-  const mapped = edges.map((edge) => mapEdgeToRepositoryWithoutReadme(edge));
-  const nextAcc = acc.concat(mapped);
-
-  if (!hasNextPage) {
-    return nextAcc;
   }
 
-  if (!endCursor) {
-    return nextAcc;
+  return allRepositories;
+}
+
+function parseTotalPagesFromLinkHeader(linkHeader?: string): number {
+  if (!linkHeader) {
+    return 1;
   }
 
-  return await collectStarredRepositoriesWithoutReadme(
-    client,
-    endCursor,
-    nextAcc,
-    metrics
-  );
+  // Link header 예시: <https://api.github.com/user/starred?per_page=100&page=2>; rel="next", <https://api.github.com/user/starred?per_page=100&page=10>; rel="last"
+  const lastLinkMatch = linkHeader.match(LINK_HEADER_LAST_PAGE_REGEX);
+  const pageNumber = lastLinkMatch?.[1];
+
+  return pageNumber ? Number.parseInt(pageNumber, 10) : 1;
+}
+
+function mapRestResponseToRepository(
+  item: RestStarredResponse[number]
+): StarredRepository {
+  return {
+    owner: item.repo.owner.login,
+    name: item.repo.name,
+    description: item.repo.description,
+    readme: null,
+    stargazerCount: item.repo.stargazers_count,
+    forkCount: item.repo.forks_count,
+    pushedAt: item.repo.pushed_at,
+    updatedAt: item.repo.updated_at,
+    starredAt: item.starred_at,
+  };
 }
 
 type StarredEdge =
@@ -433,25 +490,6 @@ async function mapEdgeToRepository(
     name: node.name,
     description: node.description,
     readme,
-    stargazerCount: node.stargazerCount,
-    forkCount: node.forkCount,
-    pushedAt: node.pushedAt,
-    updatedAt: node.updatedAt,
-    starredAt: edge.starredAt,
-  };
-}
-
-function mapEdgeToRepositoryWithoutReadme(
-  edge: StarredEdge
-): StarredRepository {
-  const { node } = edge;
-  const owner = node.owner.login;
-
-  return {
-    owner,
-    name: node.name,
-    description: node.description,
-    readme: null,
     stargazerCount: node.stargazerCount,
     forkCount: node.forkCount,
     pushedAt: node.pushedAt,
