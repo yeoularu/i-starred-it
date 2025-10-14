@@ -1,88 +1,33 @@
 # I Starred It
 
-A powerful AI-powered search engine for your GitHub starred repositories. Search through your stars using natural language queries and find exactly what you're looking for.
+**but I can't find it.** 🔍
 
-## Overview
+AI-powered search engine for GitHub starred repositories. Find what you need with natural language queries.
 
-**I Starred It** helps you rediscover and search through your GitHub starred repositories efficiently. Instead of manually browsing through hundreds of stars, simply describe what you're looking for in natural language, and the AI will generate optimized search keywords to find relevant repositories.
+## Features
 
-### Key Features
-
-- 🤖 **AI-Powered Search**: Converts natural language queries into optimized search keywords using Cloudflare Workers AI
-- 🔍 **BM25 Algorithm**: Fast and accurate client-side search using BM25 ranking algorithm
-- 📚 **Deep Indexing**: Searches across repository names, descriptions, owners, and README files
-- 📝 **Search History**: Automatically saves and manages your search history
-- 🔒 **Secure Authentication**: GitHub OAuth integration via better-auth
-- ⚡ **Rate Limiting**: Daily search limit (20 searches per day) to manage AI usage
-- 🎨 **Modern UI**: Beautiful, responsive interface built with React and shadcn/ui
-
-## How It Works
-
-1. **Authenticate**: Sign in with your GitHub account
-2. **Fetch Stars**: Your starred repositories are automatically fetched and indexed
-3. **Natural Language Search**: Type queries like "python web framework" or "react component library"
-4. **AI Processing**: The AI converts your query into optimized search keywords
-5. **BM25 Search**: Client-side search engine ranks repositories by relevance
-6. **View Results**: Browse through ranked results with highlighted matches
+- 🤖 **AI Keyword Generation** - Cloudflare Workers AI converts natural language to search keywords
+- 🔍 **BM25 Search** - Client-side ranking across repo names, descriptions, and READMEs
+- 💾 **Smart Bookmarking** - Like repositories with compressed context snapshots (70% compression via deflate-raw)
+- 📝 **Search History** - Persistent query history with soft delete
+- ⚡ **Rate Limited** - 20 searches/day per user (UTC reset)
+- 🎨 **Modern Stack** - React 19, TanStack Query, ORPC, Cloudflare Workers
 
 ## Tech Stack
 
-### Frontend
+**Frontend**: React 19, TanStack Router, TanStack Query, Vite, TailwindCSS 4, shadcn/ui  
+**Backend**: Hono, ORPC, Cloudflare Workers AI, D1 (SQLite), Drizzle ORM  
+**Auth**: better-auth with GitHub OAuth  
+**Monorepo**: Turborepo, TypeScript, Biome
 
-- **React 19** - Modern React with concurrent features
-- **TanStack Router** - Type-safe file-based routing
-- **Vite** - Fast build tool and dev server
-- **TailwindCSS 4** - Utility-first styling
-- **shadcn/ui** - High-quality UI components
-- **Motion** - Smooth animations
-
-### Backend
-
-- **Hono** - Lightweight edge framework
-- **oRPC** - End-to-end type-safe APIs
-- **Cloudflare Workers** - Serverless edge runtime
-- **Cloudflare Workers AI** - AI keyword generation
-- **Drizzle ORM** - Type-safe database queries
-- **Cloudflare D1** - SQLite at the edge
-
-### Auth & Database
-
-- **better-auth** - Modern authentication
-- **GitHub OAuth** - Social authentication
-- **D1 (SQLite)** - Serverless database
-
-### Development
-
-- **Turborepo** - High-performance monorepo
-- **TypeScript** - Full type safety
-- **Biome** - Fast linting and formatting
-- **Husky** - Git hooks
-
-## Project Structure
+## Architecture
 
 ```
-i-starred-it/
-├── apps/
-│   ├── web/              # Frontend application
-│   │   ├── src/
-│   │   │   ├── features/ # Feature-based modules
-│   │   │   │   ├── search/  # Search functionality
-│   │   │   │   └── github/  # GitHub integration
-│   │   │   ├── components/  # Reusable UI components
-│   │   │   └── routes/      # Application routes
-│   │   └── package.json
-│   └── server/           # Backend API
-│       ├── src/
-│       │   └── index.ts  # Hono server entry
-│       └── package.json
-├── packages/
-│   ├── api/              # Business logic & services
-│   │   └── src/
-│   │       ├── routers/     # API endpoints
-│   │       └── services/    # Core services (GitHub, Search)
-│   ├── auth/             # Authentication configuration
-│   └── db/               # Database schema & migrations
-└── package.json
+apps/web     → Frontend (React 19, TanStack Router/Query)
+apps/server  → Backend (Hono on Cloudflare Workers)
+packages/api → Business logic (ORPC routers, services)
+packages/auth→ better-auth config
+packages/db  → Drizzle schema & migrations
 ```
 
 ## Getting Started
@@ -127,89 +72,39 @@ GITHUB_CLIENT_SECRET=your-github-client-secret
 VITE_SERVER_URL=http://localhost:3000
 ```
 
-4. Set up the database:
+4. Database & Start:
 
 ```bash
-pnpm db:push
+pnpm db:generate        # Generate migrations
+pnpm db:migrate:local   # Apply to local D1
+pnpm dev                # Start dev servers (web:3001, api:3000)
 ```
 
-5. Start the development servers:
+**Note**: For production, uncomment `session.cookieCache` and `advanced.crossSubDomainCookies` in `apps/server/src/lib/auth.ts`.
 
-```bash
-pnpm dev
-```
+## Key Features
 
-The web app will be available at [http://localhost:3001](http://localhost:3001)  
-The API server will run at [http://localhost:3000](http://localhost:3000)
+### Smart Bookmarking
+When you like a repository, the entire search context (top 20 results with READMEs) is compressed and stored:
+- **Compression**: deflate-raw (70% reduction, ~150KB for 20 repos)
+- **ORPC Blob Support**: Native binary transfer without Base64 overhead
+- **Context Preservation**: Captures positive/negative signals for future ML
 
-## Available Scripts
+### Client-Side Search
+BM25 algorithm with tuned field weights:
+- Repository name: 5x
+- Description: 3x  
+- README: 1x
 
-### Root Level
-
-- `pnpm dev` - Start all applications in development mode
-- `pnpm build` - Build all applications
-- `pnpm check` - Run Biome linter and formatter
-- `pnpm check-types` - Type check all packages
-- `pnpm db:push` - Apply schema changes to database
-- `pnpm db:studio` - Open Drizzle Studio
-- `pnpm db:generate` - Generate database migrations
-- `pnpm db:migrate` - Run database migrations
-
-### Web App
-
-- `pnpm dev:web` - Start only the web application
-
-### Server
-
-- `pnpm dev:server` - Start only the server
-- `cd apps/server && pnpm db:migrate:local` - Run migrations on local D1
-
-### Important Configuration
-
-In `apps/server/src/lib/auth.ts`, uncomment the `session.cookieCache` and `advanced.crossSubDomainCookies` sections for production deployments to ensure proper cookie handling across domains.
-
-## Features in Detail
-
-### AI-Powered Keyword Generation
-
-The application uses Cloudflare Workers AI to convert natural language queries into search-optimized keywords. The AI model analyzes your query and generates keywords that work well with the BM25 ranking algorithm.
-
-### BM25 Search Engine
-
-A client-side implementation of the BM25 (Best Matching 25) algorithm provides fast, accurate search results. The engine indexes repository metadata including:
-
-- Repository owner
-- Repository name
-- Description
-- README content
-
-Field weights are tuned to prioritize repository names while still considering descriptions and README content.
-
-### Search History Management
-
-All searches are persisted to the database with:
-
-- Original query
-- Generated keywords
-- Timestamp
-- Soft delete capability
-
-### Rate Limiting
-
-To manage AI usage costs, the application implements a daily search limit:
-
-- 20 searches per user per day (UTC)
-- Counter resets at UTC midnight
-- Clear feedback when limit is reached
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+### ORPC + TanStack Query Integration
+- Type-safe APIs with automatic query key generation
+- Intelligent caching (1min stale time, 10min GC)
+- Optimistic updates on mutations
 
 ## License
 
-MIT License - feel free to use this project for your own purposes.
+MIT
 
-## Acknowledgments
+---
 
-- Scaffolded with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack)
+Scaffolded with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack)
