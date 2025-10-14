@@ -3,7 +3,9 @@ import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "../index";
 import {
+  fetchReadmesForRepositoriesForUser,
   fetchStarredRepositoriesForUser,
+  fetchStarredRepositoriesWithoutReadmeForUser,
   GithubResourceLimitError,
   MissingGithubTokenError,
 } from "../services/github";
@@ -16,6 +18,12 @@ import {
 } from "../services/search";
 
 const MAX_KEYWORD_QUERY_LENGTH = 1000;
+const MAX_REPOSITORIES_PER_REQUEST = 50;
+
+const repositoryIdentifierSchema = z.object({
+  owner: z.string().min(1),
+  name: z.string().min(1),
+});
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => "OK"),
@@ -49,6 +57,66 @@ export const appRouter = {
       throw error;
     }
   }),
+  githubStarredRepositoriesWithoutReadme: protectedProcedure.handler(
+    async ({ context }) => {
+      const userId = context.session?.user?.id;
+
+      if (!userId) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
+      try {
+        const data = await fetchStarredRepositoriesWithoutReadmeForUser(userId);
+        return data;
+      } catch (error) {
+        if (error instanceof MissingGithubTokenError) {
+          throw new ORPCError("NOT_FOUND", {
+            message: error.message,
+          });
+        }
+
+        if (error instanceof GithubResourceLimitError) {
+          throw new ORPCError("FAILED_PRECONDITION", {
+            message: error.message,
+          });
+        }
+
+        throw error;
+      }
+    }
+  ),
+  githubFetchReadmes: protectedProcedure
+    .input(
+      z.object({
+        repositories: z
+          .array(repositoryIdentifierSchema)
+          .min(1)
+          .max(MAX_REPOSITORIES_PER_REQUEST),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      const userId = context.session?.user?.id;
+
+      if (!userId) {
+        throw new ORPCError("UNAUTHORIZED");
+      }
+
+      try {
+        const data = await fetchReadmesForRepositoriesForUser(
+          userId,
+          input.repositories
+        );
+        return data;
+      } catch (error) {
+        if (error instanceof MissingGithubTokenError) {
+          throw new ORPCError("NOT_FOUND", {
+            message: error.message,
+          });
+        }
+
+        throw error;
+      }
+    }),
   generateSearchKeywords: protectedProcedure
     .input(
       z.object({

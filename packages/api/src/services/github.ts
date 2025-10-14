@@ -54,6 +54,20 @@ export type FetchStarredRepositoriesResult = {
   metrics: FetchMetrics;
 };
 
+export type RepositoryIdentifier = {
+  owner: string;
+  name: string;
+};
+
+export type FetchReadmesResult = {
+  readmes: Array<{
+    owner: string;
+    name: string;
+    readme: string | null;
+  }>;
+  metrics: Pick<FetchMetrics, "restReadme">;
+};
+
 type StarredRepositoriesQuery = {
   viewer: {
     starredRepositories: {
@@ -130,6 +144,46 @@ export async function fetchStarredRepositoriesForUser(
   });
 }
 
+export async function fetchStarredRepositoriesWithoutReadmeForUser(
+  userId: string,
+  options?: {
+    tokenProvider?: TokenProvider;
+    clientFactory?: ClientFactory;
+    onMetrics?: (metrics: FetchMetrics) => void;
+  }
+): Promise<FetchStarredRepositoriesResult> {
+  const provider = options?.tokenProvider ?? getGithubAccessToken;
+  const token = await provider(userId);
+
+  if (!token) {
+    throw new MissingGithubTokenError(userId);
+  }
+
+  const client = options?.clientFactory?.(token) ?? createOctokit(token);
+  return await fetchStarredRepositoriesWithoutReadme(client, {
+    onMetrics: options?.onMetrics,
+  });
+}
+
+export async function fetchReadmesForRepositoriesForUser(
+  userId: string,
+  repositories: RepositoryIdentifier[],
+  options?: {
+    tokenProvider?: TokenProvider;
+    clientFactory?: ClientFactory;
+  }
+): Promise<FetchReadmesResult> {
+  const provider = options?.tokenProvider ?? getGithubAccessToken;
+  const token = await provider(userId);
+
+  if (!token) {
+    throw new MissingGithubTokenError(userId);
+  }
+
+  const client = options?.clientFactory?.(token) ?? createOctokit(token);
+  return await fetchReadmesForRepositories(client, repositories);
+}
+
 export async function fetchStarredRepositories(
   client: GitHubClient,
   options?: {
@@ -166,6 +220,77 @@ export async function fetchStarredRepositories(
 
   return {
     repositories,
+    metrics,
+  };
+}
+
+export async function fetchStarredRepositoriesWithoutReadme(
+  client: GitHubClient,
+  options?: {
+    onMetrics?: (metrics: FetchMetrics) => void;
+  }
+): Promise<FetchStarredRepositoriesResult> {
+  const metrics: FetchMetrics = {
+    totalDurationMs: 0,
+    graphql: {
+      requests: 0,
+      durationMs: 0,
+    },
+    restReadme: {
+      requests: 0,
+      durationMs: 0,
+    },
+    cdnReadme: {
+      requests: 0,
+      durationMs: 0,
+    },
+  };
+  const startedAt = Date.now();
+  const repositories = await collectStarredRepositoriesWithoutReadme(
+    client,
+    null,
+    [],
+    metrics
+  );
+  metrics.totalDurationMs = Date.now() - startedAt;
+
+  if (options?.onMetrics) {
+    options.onMetrics(metrics);
+  }
+
+  return {
+    repositories,
+    metrics,
+  };
+}
+
+export async function fetchReadmesForRepositories(
+  client: GitHubClient,
+  repositories: RepositoryIdentifier[]
+): Promise<FetchReadmesResult> {
+  const MAX_REPOS = 50;
+  const toFetch = repositories.slice(0, MAX_REPOS);
+
+  const metrics = {
+    restReadme: {
+      requests: 0,
+      durationMs: 0,
+    },
+  };
+
+  const readmes = await Promise.all(
+    toFetch.map(async ({ owner, name }) => {
+      const readme = await fetchReadmeViaRest(client, owner, name, metrics);
+      return {
+        owner,
+        name,
+        readme,
+      };
+    })
+  );
+
+  return {
+    readmes,
     metrics,
   };
 }
@@ -242,6 +367,55 @@ async function collectStarredRepositories(
   return await collectStarredRepositories(client, endCursor, nextAcc, metrics);
 }
 
+async function collectStarredRepositoriesWithoutReadme(
+  client: GitHubClient,
+  cursor: string | null,
+  acc: StarredRepository[],
+  metrics: FetchMetrics
+): Promise<StarredRepository[]> {
+  const graphqlStartedAt = Date.now();
+  let response: StarredRepositoriesQuery;
+  try {
+    response = await client.graphql<StarredRepositoriesQuery>(
+      STARRED_REPOSITORIES_QUERY,
+      {
+        cursor,
+        pageSize: PAGE_SIZE,
+      }
+    );
+  } catch (error) {
+    if (isResourceLimitError(error)) {
+      throw new GithubResourceLimitError();
+    }
+
+    throw error;
+  }
+  metrics.graphql.requests += 1;
+  metrics.graphql.durationMs += Date.now() - graphqlStartedAt;
+
+  const {
+    pageInfo: { endCursor, hasNextPage },
+    edges,
+  } = response.viewer.starredRepositories;
+  const mapped = edges.map((edge) => mapEdgeToRepositoryWithoutReadme(edge));
+  const nextAcc = acc.concat(mapped);
+
+  if (!hasNextPage) {
+    return nextAcc;
+  }
+
+  if (!endCursor) {
+    return nextAcc;
+  }
+
+  return await collectStarredRepositoriesWithoutReadme(
+    client,
+    endCursor,
+    nextAcc,
+    metrics
+  );
+}
+
 type StarredEdge =
   StarredRepositoriesQuery["viewer"]["starredRepositories"]["edges"][number];
 
@@ -259,6 +433,25 @@ async function mapEdgeToRepository(
     name: node.name,
     description: node.description,
     readme,
+    stargazerCount: node.stargazerCount,
+    forkCount: node.forkCount,
+    pushedAt: node.pushedAt,
+    updatedAt: node.updatedAt,
+    starredAt: edge.starredAt,
+  };
+}
+
+function mapEdgeToRepositoryWithoutReadme(
+  edge: StarredEdge
+): StarredRepository {
+  const { node } = edge;
+  const owner = node.owner.login;
+
+  return {
+    owner,
+    name: node.name,
+    description: node.description,
+    readme: null,
     stargazerCount: node.stargazerCount,
     forkCount: node.forkCount,
     pushedAt: node.pushedAt,
@@ -317,7 +510,7 @@ async function fetchReadmeViaRest(
   client: GitHubClient,
   owner: string,
   repo: string,
-  metrics: FetchMetrics
+  metrics: Pick<FetchMetrics, "restReadme">
 ): Promise<string | null> {
   try {
     const startedAt = Date.now();

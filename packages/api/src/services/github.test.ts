@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  fetchReadmesForRepositories,
   fetchStarredRepositories,
   fetchStarredRepositoriesForUser,
+  fetchStarredRepositoriesWithoutReadme,
   MissingGithubTokenError,
 } from "./github";
 
@@ -28,6 +30,11 @@ type MockGitHubClient = {
 };
 
 const HTTP_STATUS_NOT_FOUND = 404;
+const MAX_REPOSITORIES_PER_BATCH = 50;
+const TEST_REPOSITORIES_OVER_LIMIT = 60;
+const TEST_PARALLEL_REQUESTS_COUNT = 5;
+const TEST_DELAY_MS = 10;
+const TEST_TIMEOUT_MS = 100;
 
 const createMockGitHubClient = (): MockGitHubClient => {
   const graphql = vi.fn();
@@ -346,5 +353,219 @@ describe("fetchStarredRepositoriesForUser", () => {
         clientFactory: () => createMockGitHubClient().client,
       })
     ).rejects.toThrow(MissingGithubTokenError);
+  });
+});
+
+describe("fetchStarredRepositoriesWithoutReadme", () => {
+  let graphql: ReturnType<typeof vi.fn>;
+  let client: GitHubClient;
+
+  beforeEach(() => {
+    const mocks = createMockGitHubClient();
+    graphql = mocks.graphql;
+    client = mocks.client;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns repositories without fetching README", async () => {
+    graphql.mockResolvedValueOnce(
+      createGraphqlResponse({
+        edges: [
+          createEdge({
+            owner: "octocat",
+            name: "hello-world",
+            description: "First repo",
+            starredAt: new Date().toISOString(),
+          }),
+          createEdge({
+            owner: "octocat",
+            name: "second-repo",
+            description: "Second repo",
+            starredAt: new Date().toISOString(),
+          }),
+        ],
+      })
+    );
+
+    const result = await fetchStarredRepositoriesWithoutReadme(client);
+
+    expect(result.repositories).toEqual([
+      expect.objectContaining({
+        owner: "octocat",
+        name: "hello-world",
+        description: "First repo",
+        readme: null,
+      }),
+      expect.objectContaining({
+        owner: "octocat",
+        name: "second-repo",
+        description: "Second repo",
+        readme: null,
+      }),
+    ]);
+    expect(result.metrics.graphql.requests).toBe(1);
+    expect(result.metrics.restReadme.requests).toBe(0);
+    expect(result.metrics.cdnReadme.requests).toBe(0);
+  });
+
+  it("handles pagination correctly", async () => {
+    const now = new Date().toISOString();
+    graphql
+      .mockResolvedValueOnce(
+        createGraphqlResponse({
+          hasNextPage: true,
+          endCursor: "cursor-1",
+          edges: [
+            createEdge({
+              owner: "octocat",
+              name: "repo-1",
+              description: "Repo 1",
+              starredAt: now,
+            }),
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        createGraphqlResponse({
+          edges: [
+            createEdge({
+              owner: "octocat",
+              name: "repo-2",
+              description: "Repo 2",
+              starredAt: now,
+            }),
+          ],
+        })
+      );
+
+    const result = await fetchStarredRepositoriesWithoutReadme(client);
+
+    expect(result.repositories).toHaveLength(2);
+    expect(result.repositories).toEqual([
+      expect.objectContaining({
+        owner: "octocat",
+        name: "repo-1",
+        readme: null,
+      }),
+      expect.objectContaining({
+        owner: "octocat",
+        name: "repo-2",
+        readme: null,
+      }),
+    ]);
+    expect(graphql).toHaveBeenCalledTimes(2);
+    expect(result.metrics.graphql.requests).toBe(2);
+  });
+});
+
+describe("fetchReadmesForRepositories", () => {
+  let getReadme: ReturnType<typeof vi.fn>;
+  let client: GitHubClient;
+
+  beforeEach(() => {
+    const mocks = createMockGitHubClient();
+    getReadme = mocks.getReadme;
+    client = mocks.client;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("fetches READMEs for provided repositories", async () => {
+    getReadme
+      .mockResolvedValueOnce({ data: "# Repo 1 README" })
+      .mockResolvedValueOnce({ data: "# Repo 2 README" });
+
+    const result = await fetchReadmesForRepositories(client, [
+      { owner: "octocat", name: "repo-1" },
+      { owner: "octocat", name: "repo-2" },
+    ]);
+
+    expect(result.readmes).toEqual([
+      {
+        owner: "octocat",
+        name: "repo-1",
+        readme: "# Repo 1 README",
+      },
+      {
+        owner: "octocat",
+        name: "repo-2",
+        readme: "# Repo 2 README",
+      },
+    ]);
+    expect(result.metrics.restReadme.requests).toBe(2);
+    expect(getReadme).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null for repositories without README", async () => {
+    const error = new Error("Not found") as Error & { status: number };
+    error.status = HTTP_STATUS_NOT_FOUND;
+
+    getReadme
+      .mockResolvedValueOnce({ data: "# Repo 1 README" })
+      .mockRejectedValueOnce(error);
+
+    const result = await fetchReadmesForRepositories(client, [
+      { owner: "octocat", name: "repo-1" },
+      { owner: "octocat", name: "repo-2" },
+    ]);
+
+    expect(result.readmes).toEqual([
+      {
+        owner: "octocat",
+        name: "repo-1",
+        readme: "# Repo 1 README",
+      },
+      {
+        owner: "octocat",
+        name: "repo-2",
+        readme: null,
+      },
+    ]);
+  });
+
+  it("limits requests to 50 repositories", async () => {
+    const repos = Array.from(
+      { length: TEST_REPOSITORIES_OVER_LIMIT },
+      (_, i) => ({
+        owner: "octocat",
+        name: `repo-${i}`,
+      })
+    );
+
+    getReadme.mockResolvedValue({ data: "# README" });
+
+    const result = await fetchReadmesForRepositories(client, repos);
+
+    expect(result.readmes).toHaveLength(MAX_REPOSITORIES_PER_BATCH);
+    expect(getReadme).toHaveBeenCalledTimes(MAX_REPOSITORIES_PER_BATCH);
+  });
+
+  it("handles parallel requests correctly", async () => {
+    const repos = Array.from(
+      { length: TEST_PARALLEL_REQUESTS_COUNT },
+      (_, i) => ({
+        owner: "octocat",
+        name: `repo-${i}`,
+      })
+    );
+
+    let callCount = 0;
+    getReadme.mockImplementation(async () => {
+      callCount++;
+      await new Promise((resolve) => setTimeout(resolve, TEST_DELAY_MS));
+      return { data: `# README ${callCount}` };
+    });
+
+    const startTime = Date.now();
+    const result = await fetchReadmesForRepositories(client, repos);
+    const duration = Date.now() - startTime;
+
+    expect(result.readmes).toHaveLength(TEST_PARALLEL_REQUESTS_COUNT);
+    expect(duration).toBeLessThan(TEST_TIMEOUT_MS);
   });
 });

@@ -6,13 +6,24 @@ import { useQuery } from "@tanstack/react-query";
 import { get, set } from "idb-keyval";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { orpc } from "@/utils/orpc";
+import { client } from "@/utils/orpc";
 
 const STORAGE_PREFIX = "github-starred-repositories";
 
+type ExtendedFetchMetrics = FetchMetrics & {
+  restReadme: {
+    requests: number;
+    durationMs: number;
+  };
+  cdnReadme: {
+    requests: number;
+    durationMs: number;
+  };
+};
+
 type CachedEntry = {
   repositories: StarredRepository[];
-  metrics: FetchMetrics;
+  metrics: ExtendedFetchMetrics;
 };
 
 type CachedValue = CachedEntry | null;
@@ -23,7 +34,7 @@ type CacheState = {
   save: (entry: CachedEntry) => Promise<void>;
 };
 
-const DEFAULT_METRICS: FetchMetrics = {
+const DEFAULT_METRICS: ExtendedFetchMetrics = {
   totalDurationMs: 0,
   graphql: {
     requests: 0,
@@ -111,6 +122,145 @@ function useCachedRepositories(userId: string | null): CacheState {
   );
 }
 
+async function fetchReadmeFromCdn(
+  owner: string,
+  name: string
+): Promise<string | null> {
+  const url = `https://raw.githubusercontent.com/${owner}/${name}/HEAD/README.md`;
+
+  try {
+    const response = await fetch(url);
+
+    if (response.ok) {
+      const text = await response.text();
+      return text.length > 0 ? text : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAllStarredRepositories(): Promise<{
+  repositories: StarredRepository[];
+  metrics: ExtendedFetchMetrics;
+}> {
+  const metrics: ExtendedFetchMetrics = {
+    totalDurationMs: 0,
+    graphql: {
+      requests: 0,
+      durationMs: 0,
+    },
+    restReadme: {
+      requests: 0,
+      durationMs: 0,
+    },
+    cdnReadme: {
+      requests: 0,
+      durationMs: 0,
+    },
+  };
+
+  const startedAt = Date.now();
+
+  const { repositories: reposWithoutReadme, metrics: step1Metrics } =
+    await client.githubStarredRepositoriesWithoutReadme();
+
+  metrics.graphql.requests += step1Metrics.graphql.requests;
+  metrics.graphql.durationMs += step1Metrics.graphql.durationMs;
+
+  const cdnStartedAt = Date.now();
+  const cdnResults = await Promise.all(
+    reposWithoutReadme.map(async (repo: StarredRepository) => {
+      const readme = await fetchReadmeFromCdn(repo.owner, repo.name);
+      metrics.cdnReadme.requests += 1;
+      return {
+        owner: repo.owner,
+        name: repo.name,
+        readme,
+      };
+    })
+  );
+  metrics.cdnReadme.durationMs = Date.now() - cdnStartedAt;
+
+  const reposNeedingRestFetch = reposWithoutReadme.filter(
+    (repo: StarredRepository) => {
+      const cdnResult = cdnResults.find(
+        (r: { owner: string; name: string; readme: string | null }) =>
+          r.owner === repo.owner && r.name === repo.name
+      );
+      return cdnResult?.readme === null;
+    }
+  );
+
+  const BATCH_SIZE = 50;
+  const batches: StarredRepository[][] = [];
+  for (let i = 0; i < reposNeedingRestFetch.length; i += BATCH_SIZE) {
+    batches.push(reposNeedingRestFetch.slice(i, i + BATCH_SIZE));
+  }
+
+  const restResults = await Promise.all(
+    batches.map(async (batch) => {
+      if (batch.length === 0) {
+        return [];
+      }
+
+      const { readmes, metrics: batchMetrics } =
+        await client.githubFetchReadmes({
+          repositories: batch.map((r: StarredRepository) => ({
+            owner: r.owner,
+            name: r.name,
+          })),
+        });
+
+      metrics.restReadme.requests += batchMetrics.restReadme.requests;
+      metrics.restReadme.durationMs += batchMetrics.restReadme.durationMs;
+
+      return readmes;
+    })
+  );
+
+  const restReadmeMap = new Map(
+    restResults
+      .flat()
+      .map((r: { owner: string; name: string; readme: string | null }) => [
+        `${r.owner}/${r.name}`,
+        r.readme,
+      ])
+  );
+
+  const repositories: StarredRepository[] = reposWithoutReadme.map(
+    (repo: StarredRepository) => {
+      const cdnResult = cdnResults.find(
+        (r: { owner: string; name: string; readme: string | null }) =>
+          r.owner === repo.owner && r.name === repo.name
+      );
+      const cdnReadme = cdnResult?.readme;
+
+      if (cdnReadme !== null && cdnReadme !== undefined) {
+        return {
+          ...repo,
+          readme: cdnReadme,
+        };
+      }
+
+      const restReadme = restReadmeMap.get(`${repo.owner}/${repo.name}`);
+      return {
+        ...repo,
+        readme: restReadme ?? null,
+      };
+    }
+  );
+
+  metrics.totalDurationMs = Date.now() - startedAt;
+
+  return {
+    repositories,
+    metrics,
+  };
+}
+
 export function useGithubStarredRepositories() {
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id ?? null;
@@ -121,7 +271,8 @@ export function useGithubStarredRepositories() {
   const gcTime = cachedEntry ? Number.POSITIVE_INFINITY : 0;
 
   const query = useQuery({
-    ...orpc.githubStarredRepositories.queryOptions(),
+    queryKey: ["github-starred-repositories-v2"],
+    queryFn: fetchAllStarredRepositories,
     enabled,
     refetchOnMount: false,
     refetchOnReconnect: false,
