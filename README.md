@@ -158,50 +158,11 @@ The API server will run at [http://localhost:3000](http://localhost:3000)
 ### Web App
 
 - `pnpm dev:web` - Start only the web application
-- `cd apps/web && pnpm deploy` - Deploy web app to Cloudflare Pages
 
 ### Server
 
 - `pnpm dev:server` - Start only the server
-- `cd apps/server && pnpm deploy` - Deploy server to Cloudflare Workers
 - `cd apps/server && pnpm db:migrate:local` - Run migrations on local D1
-
-## Deployment
-
-### Prerequisites for Production
-
-1. Create a Cloudflare D1 database:
-
-```bash
-wrangler d1 create i-starred-it-d1
-```
-
-2. Create a GitHub OAuth App:
-
-   - Go to GitHub Settings → Developer settings → OAuth Apps
-   - Set callback URL to your production server URL + `/api/auth/callback/github`
-
-3. Update `wrangler.toml` files in both `apps/web` and `apps/server` with your Cloudflare account details
-
-### Deploy to Cloudflare
-
-1. Deploy the server:
-
-```bash
-cd apps/server
-pnpm deploy
-```
-
-2. Deploy the web app:
-
-```bash
-cd apps/web
-pnpm deploy
-```
-
-3. Update environment variables in Cloudflare dashboard:
-   - Set production GitHub OAuth credentials
-   - Set production URLs for CORS and auth
 
 ### Important Configuration
 
@@ -220,7 +181,7 @@ A client-side implementation of the BM25 (Best Matching 25) algorithm provides f
 - Repository owner
 - Repository name
 - Description
-- README content (first 600 tokens)
+- README content
 
 Field weights are tuned to prioritize repository names while still considering descriptions and README content.
 

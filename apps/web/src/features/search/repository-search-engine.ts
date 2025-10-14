@@ -31,7 +31,7 @@ export type RepositorySearchResult = {
 };
 
 const DEFAULT_KEYWORD_LIMIT = 64;
-const DEFAULT_README_TOKEN_LIMIT = 600;
+const DEFAULT_README_TOKEN_LIMIT = Number.POSITIVE_INFINITY;
 const MIN_SEARCH_RESULTS = 1;
 const BM25_IDF_SMOOTHING = 0.5;
 
@@ -232,7 +232,7 @@ export class RepositorySearchEngine {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
-    return ranked.map(({ id, score }) => {
+    const results: RepositorySearchResult[] = ranked.map(({ id, score }) => {
       const doc = this.documents.get(id);
       if (!doc) {
         throw new Error("Invariant violated: missing repository document");
@@ -241,9 +241,11 @@ export class RepositorySearchEngine {
         id,
         repository: doc.repository,
         score,
-        matchedTokens: Array.from(matches.get(id) ?? new Set()),
+        matchedTokens: Array.from(matches.get(id) ?? new Set<string>()),
       };
     });
+
+    return results;
   }
 
   private updateScoresForKeyword(
