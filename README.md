@@ -78,7 +78,7 @@ pnpm dev                # Start dev servers (web:3001, api:3000)
 
 ## License
 
-MIT
+Apache 2.0
 
 ---
 
