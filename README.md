@@ -2,7 +2,12 @@
 
 **but I can't find it.** 🔍
 
-AI-powered search engine for GitHub starred repositories. Find what you need with natural language queries.
+AI-powered search engine for your GitHub starred repositories. Find what you need with natural language queries.
+
+<p align="center">
+  <img src="https://i-starred-it.yeoularu.com/about1.webp" width="480" alt="About 1" />
+  <img src="https://i-starred-it.yeoularu.com/about2.webp" width="480" alt="About 2" />
+</p>
 
 ## Features
 
@@ -11,20 +16,9 @@ AI-powered search engine for GitHub starred repositories. Find what you need wit
 
 ## Tech Stack
 
-**Frontend**: React 19, TanStack Router, TanStack Query, Vite, TailwindCSS 4, shadcn/ui  
-**Backend**: Hono, ORPC, Cloudflare Workers AI, D1 (SQLite), Drizzle ORM  
-**Auth**: better-auth with GitHub OAuth  
-**Monorepo**: Turborepo, TypeScript, Biome
-
-## Architecture
-
-```
-apps/web     → Frontend (React 19, TanStack Router/Query)
-apps/server  → Backend (Hono on Cloudflare Workers)
-packages/api → Business logic (ORPC routers, services)
-packages/auth→ better-auth config
-packages/db  → Drizzle schema & migrations
-```
+**Frontend**: React 19, TanStack Router/Query, Vite, TailwindCSS 4  
+**Backend**: Hono, ORPC, Cloudflare Workers AI, D1, Drizzle  
+**Monorepo**: Turborepo, pnpm, TypeScript
 
 ## Getting Started
 
