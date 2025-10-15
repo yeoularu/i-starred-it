@@ -40,8 +40,7 @@
         }
       },
       "nursery": {
-        "useImageSize": "off",
-        "useQwikValidLexicalScope": "off"
+        "useImageSize": "off"
       },
       "performance": {
         "noImgElement": "off"

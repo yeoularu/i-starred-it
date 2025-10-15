@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
 export type SearchHistoryItem = {
@@ -25,9 +26,13 @@ function countSearchesToday(history: SearchHistoryItem[]): number {
 
 export function useSearchHistory() {
   const queryClient = useQueryClient();
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
+  const isAuthenticated = Boolean(session?.user);
 
   const { data, isLoading, error, refetch } = useQuery({
     ...orpc.getSearchHistory.queryOptions(),
+    enabled: isAuthenticated && !isSessionPending,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   });

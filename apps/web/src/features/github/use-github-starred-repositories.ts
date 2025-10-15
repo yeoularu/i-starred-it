@@ -272,11 +272,12 @@ async function fetchAllStarredRepositories(): Promise<{
 }
 
 export function useGithubStarredRepositories() {
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
   const userId = session?.user?.id ?? null;
   const { value: cachedEntry, isReady, save } = useCachedRepositories(userId);
   const hasUser = userId !== null;
-  const enabled = hasUser && isReady && !cachedEntry;
+  const enabled = hasUser && isReady && !cachedEntry && !isSessionPending;
   const staleTime = cachedEntry ? Number.POSITIVE_INFINITY : 0;
   const gcTime = cachedEntry ? Number.POSITIVE_INFINITY : 0;
 
@@ -302,7 +303,9 @@ export function useGithubStarredRepositories() {
     query.data?.repositories ?? cachedEntry?.repositories ?? [];
   const metrics =
     query.data?.metrics ?? cachedEntry?.metrics ?? DEFAULT_METRICS;
-  const isLoading = hasUser ? !isReady || query.isLoading : false;
+  const isLoading = hasUser
+    ? isSessionPending || !isReady || query.isLoading
+    : false;
 
   useEffect(() => {
     if (!hasUser) {
