@@ -20,7 +20,6 @@ export type LikedRepository = {
   likedOwner: string;
   likedName: string;
   likedRank: number;
-  compressedSnapshot: Buffer;
   createdAt: Date;
 };
 
@@ -125,7 +124,15 @@ export async function getLikedRepositories(
   }
 
   const likes = await db
-    .select()
+    .select({
+      id: repositoryLikes.id,
+      userId: repositoryLikes.userId,
+      searchQueryId: repositoryLikes.searchQueryId,
+      likedOwner: repositoryLikes.likedOwner,
+      likedName: repositoryLikes.likedName,
+      likedRank: repositoryLikes.likedRank,
+      createdAt: repositoryLikes.createdAt,
+    })
     .from(repositoryLikes)
     .where(eq(repositoryLikes.userId, userId))
     .orderBy(desc(repositoryLikes.createdAt));

@@ -37,7 +37,7 @@ export function useRepositoryLike() {
         likedOwner,
         likedName,
         likedRank,
-        // @ts-expect-error Browser Blob vs Node.js Buffer.Blob type mismatch
+        // @ts-expect-error Browser Blob과 Node.js Buffer.Blob 타입 불일치 (런타임에는 문제없음)
         compressedSnapshot,
       });
     },
